@@ -55,6 +55,14 @@ class DashboardApp {
                 console.warn('DetailModal component not loaded');
             }
 
+            // Initialize project subtitle
+            if (typeof ProjectSubtitle !== 'undefined') {
+                window.projectSubtitle = new ProjectSubtitle('project-subtitle');
+                window.projectSubtitle.init();
+            } else {
+                console.warn('ProjectSubtitle component not loaded');
+            }
+
             // Initialize refresh button
             this.setupRefreshButton();
         } catch (error) {

@@ -1176,6 +1176,38 @@
             100% { transform: rotate(360deg); }
         }
 
+        /* Project Subtitle */
+        .project-subtitle {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .project-subtitle .project-icon {
+            font-size: 1rem;
+        }
+
+        .project-subtitle .project-label {
+            font-weight: 500;
+        }
+
+        .project-subtitle .project-name {
+            color: var(--primary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .project-subtitle .project-name:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
+
         /* Utility Classes */
         .hidden { display: none !important; }
         .text-primary { color: var(--primary); }
@@ -1222,6 +1254,13 @@
         <div class="nav-tab" data-view="graph">🔗 Graph</div>
         <div class="nav-tab" data-view="analytics">📈 Analytics</div>
     </nav>
+
+    <!-- Project Subtitle -->
+    <div id="project-subtitle" class="project-subtitle">
+        <span class="project-icon">📁</span>
+        <span class="project-label">Current Project:</span>
+        <span class="project-name">All Projects</span>
+    </div>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -1361,6 +1400,7 @@
     <script src="/static/js/components/search.js"></script>
     <script src="/static/js/components/analytics.js"></script>
     <script src="/static/js/components/project_selector.js"></script>
+    <script src="/static/js/components/project_subtitle.js"></script>
     <script src="/static/js/components/current_project.js"></script>
     <script src="/static/js/main.js"></script>
 </body>
