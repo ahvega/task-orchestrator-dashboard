@@ -83,8 +83,11 @@ class TaskStatus(BaseModel):
     complexity: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    modified_at: Optional[str] = None
     feature_id: Optional[str] = None
+    feature_name: Optional[str] = None
     project_id: Optional[str] = None  # Computed from task.project_id or feature.project_id
+    project_name: Optional[str] = None
 
 
 class Feature(BaseModel):
@@ -642,14 +645,17 @@ async def get_tasks(
     with pool.get_connection() as conn:
         cursor = conn.cursor()
 
-        # Build query with LEFT JOIN to get project_id from features
+        # Build query with LEFT JOIN to get project_id, project_name, and feature_name
         # Use COALESCE to get project_id from task directly or from feature
         query = """
             SELECT 
                 t.*,
-                COALESCE(t.project_id, f.project_id) as computed_project_id
+                COALESCE(t.project_id, f.project_id) as computed_project_id,
+                p.name as project_name,
+                f.name as feature_name
             FROM tasks t
             LEFT JOIN features f ON t.feature_id = f.id
+            LEFT JOIN projects p ON COALESCE(t.project_id, f.project_id) = p.id
             WHERE 1=1
         """
         params = []
@@ -681,6 +687,12 @@ async def get_tasks(
             # Use computed_project_id as the effective project_id
             if 'computed_project_id' in task_dict:
                 task_dict['project_id'] = task_dict['computed_project_id']
+            
+            # Add project_name and feature_name if present in the row
+            if 'project_name' in dict(task_row):
+                task_dict['project_name'] = dict(task_row).get('project_name')
+            if 'feature_name' in dict(task_row):
+                task_dict['feature_name'] = dict(task_row).get('feature_name')
             
             tasks.append(TaskStatus(**task_dict))
 
