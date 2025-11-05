@@ -26,3 +26,14 @@ data/
 
 # Local env (used by compose, not needed in build context)
 .env
+
+# Documentation and planning (not needed in container)
+.docs/
+.planning/
+
+# IDE and test artifacts
+.vscode/
+.pytest_cache/
+
+# Docker files (already in context)
+docker/

@@ -12,11 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first for better caching
-COPY requirements.txt ./
+COPY ../requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy application code from src directory
+COPY ../src ./
 
 # Default env for container usage: read DB from mounted volume
 ENV TASK_ORCHESTRATOR_DB=/data/tasks.db \

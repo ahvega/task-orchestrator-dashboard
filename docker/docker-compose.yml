@@ -1,6 +1,8 @@
 services:
   dashboard:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     image: task-orchestrator-dashboard:latest
     container_name: task-orchestrator-dashboard
     ports:

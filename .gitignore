@@ -145,9 +145,11 @@ env.bak/
 # Local History for Visual Studio Code
 .history/
 
-# Gemini - Exclude all files in the .gemini directory
+# Code assistants
 .gemini/
 GEMINI.md
+WARP.md
+AGENTS.md
 
 # Folders to ignore
 .planning/
