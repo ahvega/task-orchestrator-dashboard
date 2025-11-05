@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   dashboard:
     build: .
@@ -13,7 +11,8 @@ services:
       - ENABLE_DOCKER_DETECTION=${ENABLE_DOCKER_DETECTION:-false}
     volumes:
       # Reuse the MCP server's named volume that contains tasks.db
-      - mcp-task-data:/data:ro
+      # Note: SQLite requires write access even for reads (for WAL files)
+      - mcp-task-data:/data
     restart: unless-stopped
 
 volumes:

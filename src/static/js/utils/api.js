@@ -140,6 +140,69 @@ class APIClient {
         const queryString = new URLSearchParams(params).toString();
         return this.fetch(`/api/search?${queryString}`);
     }
+
+    // ========================================
+    // CRUD Operations (Write)
+    // ========================================
+
+    /**
+     * Update task status
+     * @param {string} taskId - Task UUID
+     * @param {string} status - New status (pending, in-progress, completed, cancelled, deferred, blocked)
+     */
+    async updateTaskStatus(taskId, status) {
+        return this.fetch(`/api/tasks/${taskId}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status })
+        });
+    }
+
+    /**
+     * Update task priority
+     * @param {string} taskId - Task UUID
+     * @param {string} priority - New priority (high, medium, low)
+     */
+    async updateTaskPriority(taskId, priority) {
+        return this.fetch(`/api/tasks/${taskId}/priority`, {
+            method: 'PUT',
+            body: JSON.stringify({ priority })
+        });
+    }
+
+    /**
+     * Update task complexity
+     * @param {string} taskId - Task UUID
+     * @param {number} complexity - New complexity (1-10)
+     */
+    async updateTaskComplexity(taskId, complexity) {
+        return this.fetch(`/api/tasks/${taskId}/complexity`, {
+            method: 'PUT',
+            body: JSON.stringify({ complexity })
+        });
+    }
+
+    /**
+     * Partially update task
+     * @param {string} taskId - Task UUID
+     * @param {object} updates - Fields to update {title, summary, status, priority, complexity, feature_id, project_id}
+     */
+    async updateTask(taskId, updates) {
+        return this.fetch(`/api/tasks/${taskId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(updates)
+        });
+    }
+
+    /**
+     * Create new task
+     * @param {object} taskData - Task data {title (required), summary, status, priority, complexity, feature_id, project_id}
+     */
+    async createTask(taskData) {
+        return this.fetch('/api/tasks', {
+            method: 'POST',
+            body: JSON.stringify(taskData)
+        });
+    }
 }
 
 // Create global instance

@@ -25,6 +25,6 @@ ENV TASK_ORCHESTRATOR_DB=/data/tasks.db \
 
 EXPOSE 8888
 
-CMD ["python", "server.py"]
+CMD ["python", "server_v2.py"]
 
 

@@ -39,6 +39,17 @@ class DashboardApp {
      */
     initializeGlobalComponents() {
         try {
+            // Initialize task editor
+            if (typeof TaskEditor !== 'undefined') {
+                if (!window.taskEditor) {
+                    window.taskEditor = new TaskEditor();
+                }
+                window.taskEditor.init();
+                console.log('Task editor initialized');
+            } else {
+                console.warn('TaskEditor component not loaded');
+            }
+
             // Initialize search
             if (typeof Search !== 'undefined') {
                 window.search = new Search('search-input', 'search-results');

@@ -165,11 +165,11 @@ class KanbanBoard {
             : '';
 
         return `
-            <div class="task-card" data-task-id="${task.id}">
-                <div class="task-title">${Formatters.escapeHtml(task.title)}</div>
+            <div class="task-card draggable" draggable="true" data-task-id="${task.id}" data-task-status="${task.status}">
+                <div class="task-title" data-field="title">${Formatters.escapeHtml(task.title)}</div>
                 <div class="task-meta">
-                    ${priorityBadge}
-                    ${complexityIndicator}
+                    <span class="editable-badge" data-field="priority">${priorityBadge}</span>
+                    <span class="editable-badge" data-field="complexity">${complexityIndicator}</span>
                     ${tags}
                 </div>
             </div>
@@ -182,11 +182,147 @@ class KanbanBoard {
     setupTaskCardListeners() {
         const taskCards = document.querySelectorAll('.task-card');
         taskCards.forEach(card => {
+            // Click to show details
             card.addEventListener('click', (e) => {
+                // Don't show details if clicking on editable elements
+                if (e.target.closest('.editable-badge')) {
+                    return;
+                }
                 const taskId = card.getAttribute('data-task-id');
                 this.showTaskDetails(taskId);
             });
+
+            // Setup drag and drop
+            this.setupDragAndDrop(card);
+
+            // Make elements editable
+            this.makeCardEditable(card);
         });
+
+        // Setup drop zones
+        this.setupDropZones();
+    }
+
+    /**
+     * Make card elements editable
+     */
+    makeCardEditable(card) {
+        const taskId = card.getAttribute('data-task-id');
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        // Make priority editable
+        const priorityBadge = card.querySelector('[data-field="priority"]');
+        if (priorityBadge && taskEditor) {
+            taskEditor.makePriorityEditable(priorityBadge, taskId, task.priority);
+        }
+
+        // Make complexity editable
+        const complexityIndicator = card.querySelector('[data-field="complexity"]');
+        if (complexityIndicator && taskEditor) {
+            taskEditor.makeComplexityEditable(complexityIndicator, taskId, task.complexity);
+        }
+
+        // Make title editable
+        const titleElement = card.querySelector('[data-field="title"]');
+        if (titleElement && taskEditor) {
+            taskEditor.makeTextEditable(titleElement, taskId, 'title', task.title);
+        }
+    }
+
+    /**
+     * Setup drag and drop for a card
+     */
+    setupDragAndDrop(card) {
+        card.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', card.getAttribute('data-task-id'));
+        });
+
+        card.addEventListener('dragend', (e) => {
+            card.classList.remove('dragging');
+        });
+    }
+
+    /**
+     * Setup drop zones for columns
+     */
+    setupDropZones() {
+        const columns = document.querySelectorAll('.kanban-tasks');
+        columns.forEach(column => {
+            column.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                column.classList.add('drag-over');
+            });
+
+            column.addEventListener('dragleave', (e) => {
+                if (e.target === column) {
+                    column.classList.remove('drag-over');
+                }
+            });
+
+            column.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                column.classList.remove('drag-over');
+
+                const taskId = e.dataTransfer.getData('text/plain');
+                const columnId = column.id.replace('kanban-', '');
+                
+                this.handleCardDrop(taskId, columnId);
+            });
+        });
+    }
+
+    /**
+     * Handle card drop to new column
+     */
+    async handleCardDrop(taskId, newColumnKey) {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const oldStatus = task.status;
+        const newStatus = newColumnKey;
+
+        // Don't update if dropped in same column
+        if (oldStatus === newStatus) return;
+
+        console.log(`Dropping task ${taskId} from ${oldStatus} to ${newStatus}`);
+
+        try {
+            // Update via API
+            await api.updateTaskStatus(taskId, newStatus);
+
+            // Success - reload board
+            await this.reload();
+
+            // Show success message
+            this.showSuccessToast(`Task moved to ${newStatus}`);
+
+        } catch (error) {
+            console.error('Failed to update task status:', error);
+            this.showError('Failed to move task');
+            // Reload to restore correct state
+            await this.reload();
+        }
+    }
+
+    /**
+     * Show success toast
+     */
+    showSuccessToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-success';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        }, 2000);
     }
 
     /**

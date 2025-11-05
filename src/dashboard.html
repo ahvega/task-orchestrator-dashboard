@@ -1214,6 +1214,146 @@
         .text-success { color: var(--success); }
         .text-warning { color: var(--warning); }
         .text-danger { color: var(--danger); }
+
+        /* ======================================== */
+        /* Editor Components & Interactive Styles */
+        /* ======================================== */
+
+        /* Dropdown Menu */
+        .editor-dropdown {
+            position: fixed;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            animation: dropdownFadeIn 0.15s ease-out;
+            overflow: hidden;
+        }
+
+        .dropdown-item {
+            transition: background 0.15s;
+        }
+
+        .dropdown-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .dropdown-item.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Inline Editor */
+        .inline-editor {
+            animation: editorFadeIn 0.15s ease-out;
+        }
+
+        /* Animations */
+        @keyframes dropdownFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes editorFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes highlight {
+            0% {
+                background: var(--success);
+                color: white;
+            }
+            100% {
+                background: transparent;
+                color: inherit;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        /* Drag and Drop Styles */
+        .task-card.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .task-card.draggable {
+            cursor: grab;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .task-card.draggable:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .kanban-tasks.drag-over {
+            background: rgba(59, 130, 246, 0.1);
+            border: 2px dashed var(--primary);
+            border-radius: 0.5rem;
+        }
+
+        /* Edit Indicators */
+        .editable {
+            position: relative;
+        }
+
+        .editable:hover::after {
+            content: '✏️';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            font-size: 0.75rem;
+            opacity: 0.5;
+        }
+
+        /* Success Toast */
+        .toast-success {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            z-index: 10001;
+            animation: slideIn 0.3s;
+        }
     </style>
 </head>
 <body>
@@ -1402,6 +1542,7 @@
     <script src="/static/js/components/project_selector.js"></script>
     <script src="/static/js/components/project_subtitle.js"></script>
     <script src="/static/js/components/current_project.js"></script>
+    <script src="/static/js/components/task_editor.js"></script>
     <script src="/static/js/main.js"></script>
 </body>
 </html>

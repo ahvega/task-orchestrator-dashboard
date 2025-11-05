@@ -149,6 +149,43 @@ class TagResponse(BaseModel):
     entity_types: List[str]
 
 
+class TaskStatusUpdate(BaseModel):
+    """Request model for updating task status"""
+    status: str
+
+
+class TaskPriorityUpdate(BaseModel):
+    """Request model for updating task priority"""
+    priority: str
+
+
+class TaskComplexityUpdate(BaseModel):
+    """Request model for updating task complexity"""
+    complexity: int
+
+
+class TaskPartialUpdate(BaseModel):
+    """Request model for partially updating task fields"""
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    complexity: Optional[int] = None
+    feature_id: Optional[str] = None
+    project_id: Optional[str] = None
+
+
+class TaskCreate(BaseModel):
+    """Request model for creating a new task"""
+    title: str
+    summary: Optional[str] = None
+    status: str = "pending"
+    priority: str = "medium"
+    complexity: int = 5
+    feature_id: Optional[str] = None
+    project_id: Optional[str] = None
+
+
 # Helper functions
 def get_db_pool() -> DatabasePool:
     """Get database connection pool"""
@@ -728,6 +765,521 @@ async def get_task(task_id: str):
 
         task_dict = _task_from_row(task_row)
         return TaskStatus(**task_dict)
+
+
+@app.put("/api/tasks/{task_id}/status")
+async def update_task_status(task_id: str, update: TaskStatusUpdate):
+    """
+    Update task status. Returns updated task.
+    
+    Valid statuses: pending, in-progress, completed, cancelled, deferred
+    """
+    pool = get_db_pool()
+    
+    # Validate status
+    valid_statuses = ["pending", "in-progress", "in_progress", "completed", "cancelled", "deferred", "blocked"]
+    normalized_status = update.status.lower().replace('_', '-')
+    
+    if normalized_status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+        )
+    
+    # Map to database format (uppercase with underscores)
+    db_status_map = {
+        "pending": "PENDING",
+        "in-progress": "IN_PROGRESS",
+        "in_progress": "IN_PROGRESS",
+        "completed": "COMPLETED",
+        "cancelled": "CANCELLED",
+        "deferred": "DEFERRED",
+        "blocked": "BLOCKED"
+    }
+    db_status = db_status_map.get(normalized_status, update.status.upper())
+    
+    with pool.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Check if task exists
+        uuid_bytes, uuid_str = _uuid_params(task_id)
+        uuid_nodash = uuid_str.replace('-', '') if uuid_str else None
+        
+        task_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not task_row:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Get the actual task ID (as bytes) directly from the row
+        # Don't use dict_from_row as it converts bytes to string
+        actual_task_id_bytes = task_row['id']
+        
+        # Update status
+        now = datetime.now().isoformat()
+        cursor.execute(
+            """
+            UPDATE tasks
+            SET status = ?, modified_at = ?
+            WHERE id = ?
+            """,
+            (db_status, now, actual_task_id_bytes)
+        )
+        conn.commit()
+        logger.info(f"Updated task {task_id} status to {db_status}")
+        
+        # Get updated task (try multiple match strategies)
+        updated_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not updated_row:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated task")
+        
+        task_dict = _task_from_row(updated_row)
+    
+    # Broadcast update via WebSocket
+    if ENABLE_WEBSOCKET:
+        await ws_manager.broadcast({
+            "type": "task_updated",
+            "task_id": str(task_id),
+            "status": normalized_status,
+            "timestamp": now
+        })
+    
+    return {
+        "success": True,
+        "task": TaskStatus(**task_dict),
+        "message": f"Task status updated to {normalized_status}"
+    }
+
+
+@app.put("/api/tasks/{task_id}/priority")
+async def update_task_priority(task_id: str, update: TaskPriorityUpdate):
+    """
+    Update task priority. Returns updated task.
+    
+    Valid priorities: high, medium, low
+    """
+    pool = get_db_pool()
+    
+    # Validate priority
+    valid_priorities = ["high", "medium", "low"]
+    normalized_priority = update.priority.lower()
+    
+    if normalized_priority not in valid_priorities:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}"
+        )
+    
+    # Map to database format (uppercase)
+    db_priority = normalized_priority.upper()
+    
+    with pool.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Check if task exists
+        uuid_bytes, uuid_str = _uuid_params(task_id)
+        uuid_nodash = uuid_str.replace('-', '') if uuid_str else None
+        
+        task_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not task_row:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Get actual task ID bytes
+        actual_task_id_bytes = task_row['id']
+        
+        # Update priority
+        now = datetime.now().isoformat()
+        cursor.execute(
+            """
+            UPDATE tasks
+            SET priority = ?, modified_at = ?
+            WHERE id = ?
+            """,
+            (db_priority, now, actual_task_id_bytes)
+        )
+        conn.commit()
+        logger.info(f"Updated task {task_id} priority to {db_priority}")
+        
+        # Get updated task
+        updated_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not updated_row:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated task")
+        
+        task_dict = _task_from_row(updated_row)
+    
+    # Broadcast update via WebSocket
+    if ENABLE_WEBSOCKET:
+        await ws_manager.broadcast({
+            "type": "task_updated",
+            "task_id": str(task_id),
+            "priority": normalized_priority,
+            "timestamp": now
+        })
+    
+    return {
+        "success": True,
+        "task": TaskStatus(**task_dict),
+        "message": f"Task priority updated to {normalized_priority}"
+    }
+
+
+@app.put("/api/tasks/{task_id}/complexity")
+async def update_task_complexity(task_id: str, update: TaskComplexityUpdate):
+    """
+    Update task complexity. Returns updated task.
+    
+    Valid complexity: 1-10
+    """
+    pool = get_db_pool()
+    
+    # Validate complexity
+    if not (1 <= update.complexity <= 10):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid complexity. Must be between 1 and 10"
+        )
+    
+    with pool.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Check if task exists
+        uuid_bytes, uuid_str = _uuid_params(task_id)
+        uuid_nodash = uuid_str.replace('-', '') if uuid_str else None
+        
+        task_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not task_row:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Get actual task ID bytes
+        actual_task_id_bytes = task_row['id']
+        
+        # Update complexity
+        now = datetime.now().isoformat()
+        cursor.execute(
+            """
+            UPDATE tasks
+            SET complexity = ?, modified_at = ?
+            WHERE id = ?
+            """,
+            (update.complexity, now, actual_task_id_bytes)
+        )
+        conn.commit()
+        logger.info(f"Updated task {task_id} complexity to {update.complexity}")
+        
+        # Get updated task
+        updated_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not updated_row:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated task")
+        
+        task_dict = _task_from_row(updated_row)
+    
+    # Broadcast update via WebSocket
+    if ENABLE_WEBSOCKET:
+        await ws_manager.broadcast({
+            "type": "task_updated",
+            "task_id": str(task_id),
+            "complexity": update.complexity,
+            "timestamp": now
+        })
+    
+    return {
+        "success": True,
+        "task": TaskStatus(**task_dict),
+        "message": f"Task complexity updated to {update.complexity}"
+    }
+
+
+@app.patch("/api/tasks/{task_id}")
+async def patch_task(task_id: str, update: TaskPartialUpdate):
+    """
+    Partially update a task. Only provided fields will be updated.
+    Returns updated task.
+    """
+    pool = get_db_pool()
+    
+    # Build UPDATE query dynamically based on provided fields
+    update_fields = []
+    update_values = []
+    
+    if update.title is not None:
+        update_fields.append("title = ?")
+        update_values.append(update.title)
+    
+    if update.summary is not None:
+        update_fields.append("summary = ?")
+        update_values.append(update.summary)
+    
+    if update.status is not None:
+        # Validate and normalize status
+        valid_statuses = ["pending", "in-progress", "in_progress", "completed", "cancelled", "deferred", "blocked"]
+        normalized_status = update.status.lower().replace('_', '-')
+        if normalized_status not in valid_statuses:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        
+        db_status_map = {
+            "pending": "PENDING", "in-progress": "IN_PROGRESS", "in_progress": "IN_PROGRESS",
+            "completed": "COMPLETED", "cancelled": "CANCELLED", "deferred": "DEFERRED", "blocked": "BLOCKED"
+        }
+        update_fields.append("status = ?")
+        update_values.append(db_status_map.get(normalized_status, update.status.upper()))
+    
+    if update.priority is not None:
+        # Validate priority
+        valid_priorities = ["high", "medium", "low"]
+        normalized_priority = update.priority.lower()
+        if normalized_priority not in valid_priorities:
+            raise HTTPException(status_code=400, detail="Invalid priority")
+        update_fields.append("priority = ?")
+        update_values.append(normalized_priority.upper())
+    
+    if update.complexity is not None:
+        # Validate complexity
+        if not (1 <= update.complexity <= 10):
+            raise HTTPException(status_code=400, detail="Complexity must be between 1 and 10")
+        update_fields.append("complexity = ?")
+        update_values.append(update.complexity)
+    
+    if update.feature_id is not None:
+        # Convert feature_id to bytes if provided
+        if update.feature_id:
+            try:
+                feature_id_bytes = bytes.fromhex(update.feature_id.replace('-', ''))
+                update_fields.append("feature_id = ?")
+                update_values.append(feature_id_bytes)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid feature_id format")
+        else:
+            update_fields.append("feature_id = NULL")
+    
+    if update.project_id is not None:
+        # Convert project_id to bytes if provided
+        if update.project_id:
+            try:
+                project_id_bytes = bytes.fromhex(update.project_id.replace('-', ''))
+                update_fields.append("project_id = ?")
+                update_values.append(project_id_bytes)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid project_id format")
+        else:
+            update_fields.append("project_id = NULL")
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    # Always update modified_at
+    now = datetime.now().isoformat()
+    update_fields.append("modified_at = ?")
+    update_values.append(now)
+    
+    with pool.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Check if task exists
+        uuid_bytes, uuid_str = _uuid_params(task_id)
+        uuid_nodash = uuid_str.replace('-', '') if uuid_str else None
+        
+        task_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not task_row:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Get actual task ID bytes
+        actual_task_id_bytes = task_row['id']
+        
+        # Build and execute UPDATE query
+        query = f"UPDATE tasks SET {', '.join(update_fields)} WHERE id = ?"
+        update_values.append(actual_task_id_bytes)
+        
+        cursor.execute(query, tuple(update_values))
+        conn.commit()
+        logger.info(f"Patched task {task_id} with fields: {', '.join([f.split(' = ')[0] for f in update_fields])}")
+        
+        # Get updated task
+        updated_row = cursor.execute(
+            """
+            SELECT * FROM tasks
+            WHERE id = ?
+               OR LOWER(CAST(id AS TEXT)) = LOWER(?)
+               OR LOWER(REPLACE(CAST(id AS TEXT), '-', '')) = LOWER(?)
+            """,
+            (uuid_bytes, uuid_str, uuid_nodash)
+        ).fetchone()
+        
+        if not updated_row:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated task")
+        
+        task_dict = _task_from_row(updated_row)
+    
+    # Broadcast update via WebSocket
+    if ENABLE_WEBSOCKET:
+        await ws_manager.broadcast({
+            "type": "task_updated",
+            "task_id": str(task_id),
+            "timestamp": now
+        })
+    
+    return {
+        "success": True,
+        "task": TaskStatus(**task_dict),
+        "message": "Task updated successfully"
+    }
+
+
+@app.post("/api/tasks")
+async def create_task(task: TaskCreate):
+    """
+    Create a new task. Returns created task with generated ID.
+    """
+    pool = get_db_pool()
+    
+    # Generate new UUID for task
+    import uuid
+    task_id = uuid.uuid4()
+    task_id_bytes = task_id.bytes
+    
+    # Validate status
+    valid_statuses = ["pending", "in-progress", "in_progress", "completed", "cancelled", "deferred", "blocked"]
+    normalized_status = task.status.lower().replace('_', '-')
+    if normalized_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    
+    db_status_map = {
+        "pending": "PENDING", "in-progress": "IN_PROGRESS", "in_progress": "IN_PROGRESS",
+        "completed": "COMPLETED", "cancelled": "CANCELLED", "deferred": "DEFERRED", "blocked": "BLOCKED"
+    }
+    db_status = db_status_map.get(normalized_status, task.status.upper())
+    
+    # Validate priority
+    valid_priorities = ["high", "medium", "low"]
+    normalized_priority = task.priority.lower()
+    if normalized_priority not in valid_priorities:
+        raise HTTPException(status_code=400, detail="Invalid priority")
+    db_priority = normalized_priority.upper()
+    
+    # Validate complexity
+    if not (1 <= task.complexity <= 10):
+        raise HTTPException(status_code=400, detail="Complexity must be between 1 and 10")
+    
+    # Convert feature_id and project_id to bytes if provided
+    feature_id_bytes = None
+    if task.feature_id:
+        try:
+            feature_id_bytes = bytes.fromhex(task.feature_id.replace('-', ''))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid feature_id format")
+    
+    project_id_bytes = None
+    if task.project_id:
+        try:
+            project_id_bytes = bytes.fromhex(task.project_id.replace('-', ''))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project_id format")
+    
+    now = datetime.now().isoformat()
+    
+    with pool.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Insert new task
+        cursor.execute(
+            """
+            INSERT INTO tasks (
+                id, title, summary, status, priority, complexity,
+                feature_id, project_id, created_at, modified_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id_bytes, task.title, task.summary, db_status, db_priority,
+                task.complexity, feature_id_bytes, project_id_bytes, now, now
+            )
+        )
+        conn.commit()
+        logger.info(f"Created new task {task_id} - {task.title}")
+        
+        # Get created task
+        created_row = cursor.execute(
+            "SELECT * FROM tasks WHERE id = ?",
+            (task_id_bytes,)
+        ).fetchone()
+        
+        if not created_row:
+            raise HTTPException(status_code=500, detail="Failed to retrieve created task")
+        
+        task_dict = _task_from_row(created_row)
+    
+    # Broadcast creation via WebSocket
+    if ENABLE_WEBSOCKET:
+        await ws_manager.broadcast({
+            "type": "task_created",
+            "task_id": str(task_id),
+            "timestamp": now
+        })
+    
+    return {
+        "success": True,
+        "task": TaskStatus(**task_dict),
+        "message": "Task created successfully"
+    }
 
 
 @app.get("/api/features/{feature_id}", response_model=Feature)

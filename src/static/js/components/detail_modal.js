@@ -107,13 +107,13 @@ class DetailModal {
         overviewTab.innerHTML = `
             <div style="display: grid; gap: 1rem;">
                 <div>
-                    <strong>Status:</strong> ${Formatters.statusBadge(task.status)}
+                    <strong>Status:</strong> <span data-field="status" data-task-id="${task.id}">${Formatters.statusBadge(task.status)}</span>
                 </div>
                 <div>
-                    <strong>Priority:</strong> ${Formatters.priorityBadge(task.priority)}
+                    <strong>Priority:</strong> <span data-field="priority" data-task-id="${task.id}">${Formatters.priorityBadge(task.priority)}</span>
                 </div>
                 <div>
-                    <strong>Complexity:</strong> ${Formatters.complexityIndicator(task.complexity)}
+                    <strong>Complexity:</strong> <span data-field="complexity" data-task-id="${task.id}">${Formatters.complexityIndicator(task.complexity)}</span>
                 </div>
                 <div>
                     <strong>Created:</strong> ${Formatters.datetime(task.created_at)}
@@ -194,6 +194,32 @@ class DetailModal {
             ).join(' ');
         } else {
             tagsTab.innerHTML = '<p style="color: var(--text-secondary);">No tags</p>';
+        }
+
+        // Make badges editable
+        this.makeTaskEditable(task);
+    }
+
+    /**
+     * Make task elements editable
+     */
+    makeTaskEditable(task) {
+        // Make status editable
+        const statusBadge = document.querySelector(`[data-field="status"][data-task-id="${task.id}"]`);
+        if (statusBadge && taskEditor) {
+            taskEditor.makeStatusEditable(statusBadge.firstElementChild, task.id, task.status);
+        }
+
+        // Make priority editable
+        const priorityBadge = document.querySelector(`[data-field="priority"][data-task-id="${task.id}"]`);
+        if (priorityBadge && taskEditor) {
+            taskEditor.makePriorityEditable(priorityBadge.firstElementChild, task.id, task.priority);
+        }
+
+        // Make complexity editable
+        const complexityIndicator = document.querySelector(`[data-field="complexity"][data-task-id="${task.id}"]`);
+        if (complexityIndicator && taskEditor) {
+            taskEditor.makeComplexityEditable(complexityIndicator.firstElementChild, task.id, task.complexity);
         }
     }
 
