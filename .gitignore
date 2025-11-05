@@ -147,6 +147,7 @@ env.bak/
 
 # Gemini - Exclude all files in the .gemini directory
 .gemini/
+GEMINI.md
 
 # Folders to ignore
 .planning/
