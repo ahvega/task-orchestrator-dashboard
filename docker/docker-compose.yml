@@ -1,10 +1,12 @@
+name: task-dashboard
+
 services:
   dashboard:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: task-orchestrator-dashboard:latest
-    container_name: task-orchestrator-dashboard
+    image: task-dashboard:latest
+    container_name: task-dashboard
     ports:
       - "${DASHBOARD_PORT:-8888}:8888"
     environment:

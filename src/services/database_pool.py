@@ -50,19 +50,21 @@ class DatabasePool:
         with self._lock:
             if thread_id not in self._connections:
                 try:
-                    # Open in read-only immutable mode if specified (prevents database locked errors)
-                    # Immutable mode tells SQLite the database won't change, allowing concurrent reads
+                    # Open connection based on read-only mode
                     if self.read_only:
-                        db_uri = f"file:{self.db_path}?mode=ro&immutable=1"
+                        # Use read-only mode without immutable flag to allow concurrent access
+                        # when database is being written by another process (e.g., MCP server)
+                        db_uri = f"file:{self.db_path}?mode=ro"
                         conn = sqlite3.connect(db_uri, uri=True, check_same_thread=False)
                     else:
                         conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
                     
                     conn.row_factory = sqlite3.Row
                     
-                    # Only enable WAL mode for read-write connections
-                    if not self.read_only:
-                        conn.execute("PRAGMA journal_mode=WAL")
+                    # Enable WAL mode for both read-only and read-write connections
+                    # WAL mode allows concurrent reads while writes are happening,
+                    # which is essential when the MCP server is writing concurrently
+                    conn.execute("PRAGMA journal_mode=WAL")
                     
                     # Increase cache size for better performance
                     conn.execute("PRAGMA cache_size=-64000")  # 64MB

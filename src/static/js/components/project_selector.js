@@ -122,7 +122,12 @@ class ProjectSelector {
         
         const currentProjectId = window.appState?.getProjectId();
         
-        this.projectGrid.innerHTML = this.projects.map(project => `
+        this.projectGrid.innerHTML = this.projects.map(project => {
+            const taskCompletion = project.task_completion_percentage || 0;
+            const complexityCompletion = project.complexity_completion_percentage || 0;
+            const featureCompletion = project.feature_completion_percentage || 0;
+            
+            return `
             <div class="project-card" 
                  data-project-id="${project.id}"
                  data-project-name="${this.escapeHtml(project.name)}"
@@ -131,6 +136,18 @@ class ProjectSelector {
                     <h3 class="project-card-name">${this.escapeHtml(project.name)}</h3>
                     ${project.status ? `<span class="project-card-status ${project.status}">${project.status}</span>` : ''}
                 </div>
+                
+                <!-- Main Task Completion Progress -->
+                <div class="project-card-progress">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${taskCompletion}%"></div>
+                    </div>
+                    <div class="progress-text">
+                        <strong>${taskCompletion}% complete</strong> (${project.completed_task_count || 0} of ${project.task_count || 0} tasks)
+                    </div>
+                </div>
+                
+                <!-- Stats Grid -->
                 <div class="project-card-stats">
                     <div class="project-card-stat">
                         <span>📦</span>
@@ -143,11 +160,24 @@ class ProjectSelector {
                         <span>tasks</span>
                     </div>
                 </div>
+                
+                <!-- Secondary Completion Metrics -->
+                <div class="project-card-metrics">
+                    <div class="metric-item">
+                        <span class="metric-label">By complexity:</span>
+                        <span class="metric-value">${complexityCompletion}%</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Features done:</span>
+                        <span class="metric-value">${featureCompletion}%</span>
+                    </div>
+                </div>
+                
                 <div class="project-card-date">
                     Updated ${this.formatDate(project.modified_at || project.created_at)}
                 </div>
             </div>
-        `).join('');
+        `}).join('');
         
         // Add click handlers
         this.projectGrid.querySelectorAll('.project-card').forEach(card => {

@@ -9,6 +9,7 @@ class CurrentProject {
     constructor() {
         this.container = document.getElementById('current-project-section');
         this.currentProjectId = null;
+        this.days = 7; // Default to last 7 days
         
         this.init();
     }
@@ -32,18 +33,22 @@ class CurrentProject {
         }
     }
     
-    async loadProject(projectId) {
+    async loadProject(projectId, days = null) {
         if (!projectId) {
             this.showEmptyState();
             return;
         }
         
         this.currentProjectId = projectId;
+        if (days !== null) {
+            this.days = days;
+        }
         
         try {
             this.showLoading();
             
-            const response = await fetch(`/api/projects/${projectId}/overview`);
+            const url = `/api/projects/${projectId}/overview?days=${this.days}`;
+            const response = await fetch(url);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
             const data = await response.json();
@@ -92,12 +97,18 @@ class CurrentProject {
     render(data) {
         const { project, features, tasks, stats } = data;
         
-        // Calculate overall project completion percentage
-        const completedTasks = stats.completed_count || 0;
-        const totalTasks = stats.task_count || 0;
+        // Use total task counts (unfiltered) for overall completion percentage
+        // This ensures the completion circle shows the true project completion,
+        // not just completion of recently modified tasks
+        const completedTasks = stats.total_completed_count || 0;
+        const totalTasks = stats.total_task_count || 0;
         const completionPercentage = totalTasks > 0
             ? Math.round((completedTasks / totalTasks) * 100)
             : 0;
+        
+        // Get complexity and feature completion percentages from stats
+        const complexityCompletion = stats.complexity_completion_percentage || 0;
+        const featureCompletion = stats.feature_completion_percentage || 0;
         
         this.container.innerHTML = `
             <!-- Project Header -->
@@ -106,6 +117,25 @@ class CurrentProject {
                     <div class="project-header-left">
                         <h1 class="current-project-title">${this.escapeHtml(project.name)}</h1>
                         ${project.summary ? `<p class="current-project-summary">${this.escapeHtml(project.summary)}</p>` : ''}
+                        <div class="project-completion-metrics">
+                            <span class="completion-metric">
+                                <span class="metric-icon">⚡</span>
+                                <span class="metric-label">Complexity:</span>
+                                <span class="metric-value">${complexityCompletion}%</span>
+                            </span>
+                            <span class="completion-metric-separator">•</span>
+                            <span class="completion-metric">
+                                <span class="metric-icon">📦</span>
+                                <span class="metric-label">Features:</span>
+                                <span class="metric-value">${featureCompletion}%</span>
+                            </span>
+                            <span class="completion-metric-separator">•</span>
+                            <span class="completion-metric">
+                                <span class="metric-icon">✓</span>
+                                <span class="metric-label">Tasks:</span>
+                                <span class="metric-value">${completionPercentage}%</span>
+                            </span>
+                        </div>
                         <div class="current-project-meta">
                             ${project.status ? `
                                 <div class="meta-item">
@@ -157,17 +187,112 @@ class CurrentProject {
             <!-- Recent Tasks Section -->
             <div class="section-header">
                 <h2 class="section-title">Recent Tasks</h2>
+                <div class="activity-controls">
+                    <select id="recent-tasks-days-filter" class="days-filter">
+                        <option value="1">Last 24 hours</option>
+                        <option value="7" selected>Last 7 days</option>
+                        <option value="14">Last 14 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="all">All time</option>
+                    </select>
+                </div>
             </div>
             ${tasks.length > 0 ? `
-                <div class="tasks-list">
-                    ${tasks.map(task => this.renderTaskItem(task)).join('')}
+                <div class="tasks-list-with-dates">
+                    <table class="tasks-table">
+                        <thead>
+                            <tr>
+                                <th class="col-datetime">Modified</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-task-title">Task</th>
+                                <th class="col-feature">Feature</th>
+                                <th class="col-priority">Priority</th>
+                                <th class="col-complexity">Complexity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tasks.map(task => this.renderTaskRow(task)).join('')}
+                        </tbody>
+                    </table>
                 </div>
             ` : `
                 <div class="empty-state">
-                    <p>No tasks found in this project</p>
+                    <p>No tasks found in this time period</p>
                 </div>
             `}
         `;
+        
+        // Add event handler for days filter
+        const daysFilter = this.container.querySelector('#recent-tasks-days-filter');
+        if (daysFilter) {
+            daysFilter.value = this.days.toString();
+            daysFilter.addEventListener('change', async (e) => {
+                const value = e.target.value;
+                this.days = value === 'all' ? null : parseInt(value);
+                await this.loadProject(this.currentProjectId, this.days);
+            });
+        }
+        
+        // Add click handlers for task rows
+        this.container.querySelectorAll('.task-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const taskId = row.dataset.taskId;
+                if (taskId && window.detailModal) {
+                    window.detailModal.show(taskId, 'task');
+                }
+            });
+        });
+    }
+    
+    renderTaskRow(task) {
+        const datetime = this.formatDateTime(task.modified_at);
+        const taskTitle = this.escapeHtml(task.title);
+        const featureName = task.feature_name ? this.escapeHtml(task.feature_name) : '-';
+        
+        return `
+            <tr class="task-row" data-task-id="${task.id}">
+                <td class="col-datetime">
+                    <span class="datetime-text">${datetime}</span>
+                </td>
+                <td class="col-status">
+                    <span class="task-status-badge ${task.status || 'pending'}">${task.status || 'pending'}</span>
+                </td>
+                <td class="col-task-title">
+                    <span class="task-title">${taskTitle}</span>
+                </td>
+                <td class="col-feature">
+                    <span class="feature-name">${featureName}</span>
+                </td>
+                <td class="col-priority">
+                    ${task.priority ? `<span class="task-priority-badge ${task.priority}">${task.priority}</span>` : '-'}
+                </td>
+                <td class="col-complexity">
+                    ${task.complexity ? `<span class="task-complexity-badge">C:${task.complexity}</span>` : '-'}
+                </td>
+            </tr>
+        `;
+    }
+    
+    formatDateTime(dateStr) {
+        if (!dateStr) return 'Unknown';
+        
+        try {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (diffMins < 1) return 'just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            
+            return date.toLocaleDateString();
+        } catch (error) {
+            return 'Unknown';
+        }
     }
     
     renderFeatureCard(feature) {
@@ -199,18 +324,6 @@ class CurrentProject {
                         <span>${feature.in_progress_count} in progress</span>
                     </div>
                 </div>
-            </div>
-        `;
-    }
-    
-    renderTaskItem(task) {
-        return `
-            <div class="task-item" data-task-id="${task.id}">
-                <div class="task-status-badge ${task.status || 'pending'}">${task.status || 'pending'}</div>
-                <div class="task-title-col">${this.escapeHtml(task.title)}</div>
-                ${task.feature_name ? `<div class="task-feature-col">${this.escapeHtml(task.feature_name)}</div>` : '<div></div>'}
-                ${task.priority ? `<div class="task-priority-badge ${task.priority}">${task.priority}</div>` : '<div></div>'}
-                ${task.complexity ? `<div class="task-complexity-badge">C:${task.complexity}</div>` : '<div></div>'}
             </div>
         `;
     }

@@ -494,14 +494,14 @@ async def get_stats():
 async def get_projects_summary():
     """
     Get project summary for project selector modal.
-    Returns lightweight project data with counts.
+    Returns lightweight project data with counts and completion percentages.
     """
     pool = get_db_pool()
 
     with pool.get_connection() as conn:
         cursor = conn.cursor()
 
-        # Get all projects with counts
+        # Get all projects with counts and completion metrics
         # Note: Count tasks both directly attached to project AND through features
         projects_rows = cursor.execute("""
             SELECT 
@@ -512,7 +512,35 @@ async def get_projects_summary():
                     FROM tasks t
                     LEFT JOIN features f2 ON t.feature_id = f2.id
                     WHERE t.project_id = p.id OR f2.project_id = p.id
-                ) as task_count
+                ) as task_count,
+                (
+                    SELECT COUNT(DISTINCT t.id)
+                    FROM tasks t
+                    LEFT JOIN features f2 ON t.feature_id = f2.id
+                    WHERE (t.project_id = p.id OR f2.project_id = p.id)
+                    AND UPPER(t.status) = 'COMPLETED'
+                ) as completed_task_count,
+                (
+                    SELECT SUM(t.complexity)
+                    FROM tasks t
+                    LEFT JOIN features f2 ON t.feature_id = f2.id
+                    WHERE (t.project_id = p.id OR f2.project_id = p.id)
+                    AND t.complexity IS NOT NULL
+                ) as total_complexity,
+                (
+                    SELECT SUM(t.complexity)
+                    FROM tasks t
+                    LEFT JOIN features f2 ON t.feature_id = f2.id
+                    WHERE (t.project_id = p.id OR f2.project_id = p.id)
+                    AND UPPER(t.status) = 'COMPLETED'
+                    AND t.complexity IS NOT NULL
+                ) as completed_complexity,
+                (
+                    SELECT COUNT(DISTINCT f3.id)
+                    FROM features f3
+                    WHERE f3.project_id = p.id
+                    AND UPPER(f3.status) = 'COMPLETED'
+                ) as completed_feature_count
             FROM projects p
             LEFT JOIN features f ON f.project_id = p.id
             GROUP BY p.id
@@ -522,12 +550,32 @@ async def get_projects_summary():
         projects = []
         for row in projects_rows:
             project = dict_from_row(row)
+            
+            task_count = row["task_count"] or 0
+            completed_task_count = row["completed_task_count"] or 0
+            total_complexity = row["total_complexity"] or 0
+            completed_complexity = row["completed_complexity"] or 0
+            feature_count = row["feature_count"] or 0
+            completed_feature_count = row["completed_feature_count"] or 0
+            
+            # Calculate completion percentages (as integers)
+            task_completion = round((completed_task_count / task_count * 100)) if task_count > 0 else 0
+            complexity_completion = round((completed_complexity / total_complexity * 100)) if total_complexity > 0 else 0
+            feature_completion = round((completed_feature_count / feature_count * 100)) if feature_count > 0 else 0
+            
             projects.append({
                 "id": project["id"],
                 "name": project["name"],
                 "status": project.get("status"),
-                "feature_count": row["feature_count"] or 0,
-                "task_count": row["task_count"] or 0,
+                "feature_count": feature_count,
+                "task_count": task_count,
+                "completed_task_count": completed_task_count,
+                "completed_feature_count": completed_feature_count,
+                "task_completion_percentage": task_completion,
+                "complexity_completion_percentage": complexity_completion,
+                "feature_completion_percentage": feature_completion,
+                "total_complexity": total_complexity,
+                "completed_complexity": completed_complexity,
                 "modified_at": project.get("modified_at") or project.get("created_at"),
                 "created_at": project.get("created_at")
             })
@@ -1332,10 +1380,14 @@ async def get_feature(feature_id: str):
 
 
 @app.get("/api/projects/{project_id}/overview")
-async def get_project_overview(project_id: str):
+async def get_project_overview(
+    project_id: str,
+    days: Optional[int] = Query(None, description="Filter tasks by days (e.g., 7 for last 7 days)")
+):
     """
     Get detailed overview of a specific project.
     Returns project with features, tasks, dependencies, and sections.
+    Optional days filter to show only recently modified tasks.
     """
     pool = get_db_pool()
 
@@ -1388,18 +1440,26 @@ async def get_project_overview(project_id: str):
                 "in_progress_count": frow["in_progress_count"] or 0
             })
 
-        # Get recent tasks (all tasks in project)
-        tasks_rows = cursor.execute("""
+        # Build date filter for tasks if days parameter provided
+        date_filter = ""
+        query_params = [project_id_bytes, project_id_bytes]
+        
+        if days is not None:
+            date_filter = f"AND datetime(t.modified_at) >= datetime('now', '-{days} days')"
+
+        # Get recent tasks (all tasks in project, optionally filtered by date)
+        tasks_rows = cursor.execute(f"""
             SELECT t.*, f.name as feature_name
             FROM tasks t
             LEFT JOIN features f ON t.feature_id = f.id
-            WHERE t.project_id = ?
+            WHERE (t.project_id = ?
                OR t.feature_id IN (
                    SELECT id FROM features WHERE project_id = ?
-               )
+               ))
+            {date_filter}
             ORDER BY t.modified_at DESC, t.created_at DESC
             LIMIT 50
-        """, (project_id_bytes, project_id_bytes)).fetchall()
+        """, query_params).fetchall()
 
         tasks = []
         for trow in tasks_rows:
@@ -1438,8 +1498,59 @@ async def get_project_overview(project_id: str):
                ))
         """, (project_id_bytes, project_id_bytes, project_id_bytes, project_id_bytes)).fetchone()[0]
 
-        # Calculate completed tasks count
+        # Calculate completed tasks count from filtered tasks (for recent tasks display)
         completed_count = sum(1 for t in tasks if t.get("status") == "completed")
+        
+        # Get TOTAL task counts (unfiltered) for overall project completion
+        total_task_count = cursor.execute("""
+            SELECT COUNT(*)
+            FROM tasks t
+            LEFT JOIN features f ON t.feature_id = f.id
+            WHERE t.project_id = ? OR f.project_id = ?
+        """, (project_id_bytes, project_id_bytes)).fetchone()[0]
+        
+        total_completed_count = cursor.execute("""
+            SELECT COUNT(*)
+            FROM tasks t
+            LEFT JOIN features f ON t.feature_id = f.id
+            WHERE (t.project_id = ? OR f.project_id = ?)
+              AND UPPER(t.status) = 'COMPLETED'
+        """, (project_id_bytes, project_id_bytes)).fetchone()[0]
+        
+        # Calculate complexity completion
+        total_complexity = cursor.execute("""
+            SELECT COALESCE(SUM(t.complexity), 0)
+            FROM tasks t
+            LEFT JOIN features f ON t.feature_id = f.id
+            WHERE t.project_id = ? OR f.project_id = ?
+        """, (project_id_bytes, project_id_bytes)).fetchone()[0]
+        
+        completed_complexity = cursor.execute("""
+            SELECT COALESCE(SUM(t.complexity), 0)
+            FROM tasks t
+            LEFT JOIN features f ON t.feature_id = f.id
+            WHERE (t.project_id = ? OR f.project_id = ?)
+              AND UPPER(t.status) = 'COMPLETED'
+        """, (project_id_bytes, project_id_bytes)).fetchone()[0]
+        
+        # Calculate feature completion
+        total_features = cursor.execute("""
+            SELECT COUNT(*)
+            FROM features
+            WHERE project_id = ?
+        """, (project_id_bytes,)).fetchone()[0]
+        
+        completed_features = cursor.execute("""
+            SELECT COUNT(*)
+            FROM features
+            WHERE project_id = ?
+              AND UPPER(status) = 'COMPLETED'
+        """, (project_id_bytes,)).fetchone()[0]
+        
+        # Calculate percentages (as integers)
+        task_completion = round((total_completed_count / total_task_count * 100)) if total_task_count > 0 else 0
+        complexity_completion = round((completed_complexity / total_complexity * 100)) if total_complexity > 0 else 0
+        feature_completion = round((completed_features / total_features * 100)) if total_features > 0 else 0
         
         return {
             "project": {
@@ -1454,10 +1565,15 @@ async def get_project_overview(project_id: str):
             "tasks": tasks,
             "stats": {
                 "feature_count": len(features),
-                "task_count": len(tasks),
-                "completed_count": completed_count,
+                "task_count": len(tasks),  # Filtered task count (for recent tasks list)
+                "completed_count": completed_count,  # Filtered completed count
                 "dependency_count": dep_count,
-                "section_count": section_count
+                "section_count": section_count,
+                "total_task_count": total_task_count,  # Total unfiltered task count
+                "total_completed_count": total_completed_count,  # Total unfiltered completed count
+                "task_completion_percentage": task_completion,
+                "complexity_completion_percentage": complexity_completion,
+                "feature_completion_percentage": feature_completion
             }
         }
 

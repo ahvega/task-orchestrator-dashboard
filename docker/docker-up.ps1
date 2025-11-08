@@ -17,8 +17,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $env:DASHBOARD_PORT = "$Port"
+$env:COMPOSE_PROJECT_NAME = "task-dashboard"
 Write-Host "[dashboard] Starting on port $Port..." -ForegroundColor Green
-docker compose up --build -d
+docker compose -p task-dashboard up --build -d
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "[dashboard] Running at http://localhost:$Port" -ForegroundColor Green

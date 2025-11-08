@@ -317,20 +317,32 @@
             border-radius: 0.75rem;
             padding: 1rem;
             min-height: 500px;
+            min-width: 200px;
         }
 
         .kanban-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
             margin-bottom: 1rem;
             padding-bottom: 1rem;
             border-bottom: 1px solid var(--border);
+            white-space: nowrap;
         }
 
         .kanban-title {
             font-size: 1.125rem;
             font-weight: 600;
+        }
+
+        .column-percentage {
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--primary);
+            margin-left: 0.5rem;
+            opacity: 0.8;
         }
 
         .task-count {
@@ -688,6 +700,63 @@
             margin-top: 0.75rem;
         }
 
+        /* Project Card Progress */
+        .project-card-progress {
+            margin: 1rem 0;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--success) 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .progress-text strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Project Card Secondary Metrics */
+        .project-card-metrics {
+            display: flex;
+            gap: 1rem;
+            padding-top: 0.75rem;
+            margin-top: 0.75rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+        }
+
+        .metric-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+        }
+
+        .metric-value {
+            color: var(--primary);
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+
         /* Current Project Section */
         .current-project-header {
             background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
@@ -724,6 +793,46 @@
             font-size: 1rem;
             line-height: 1.6;
             margin-bottom: 1rem;
+        }
+
+        .project-completion-metrics {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+            border-radius: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .completion-metric {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .completion-metric .metric-icon {
+            font-size: 1.1rem;
+        }
+
+        .completion-metric .metric-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .completion-metric .metric-value {
+            color: var(--primary);
+            font-weight: 700;
+            font-family: var(--font-mono);
+            font-size: 1rem;
+        }
+
+        .completion-metric-separator {
+            color: var(--text-tertiary);
+            font-size: 0.75rem;
+            opacity: 0.5;
         }
 
         .current-project-meta {
@@ -946,6 +1055,113 @@
             font-family: var(--font-mono);
             font-size: 0.875rem;
             color: var(--text-secondary);
+        }
+
+        /* Tasks Table with Dates */
+        .tasks-list-with-dates {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+
+        .tasks-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .tasks-table thead {
+            background: var(--bg-tertiary);
+            border-bottom: 2px solid var(--border);
+        }
+
+        .tasks-table th {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .task-row {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        .task-row:last-child {
+            border-bottom: none;
+        }
+
+        .task-row:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .tasks-table td {
+            padding: 1rem;
+            color: var(--text-primary);
+        }
+
+        .col-datetime {
+            width: 120px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .col-status {
+            width: 120px;
+        }
+
+        .col-task-title {
+            min-width: 250px;
+        }
+
+        .col-feature {
+            width: 180px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .col-priority {
+            width: 100px;
+        }
+
+        .col-complexity {
+            width: 100px;
+        }
+
+        .datetime-text {
+            font-family: var(--font-mono);
+            font-size: 0.813rem;
+        }
+
+        .activity-controls {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .days-filter {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .days-filter:hover {
+            border-color: var(--primary);
+        }
+
+        .days-filter:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         .empty-state {

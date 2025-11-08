@@ -140,11 +140,16 @@ class KanbanBoard {
      */
     renderColumn(columnKey, column) {
         const taskCards = column.tasks.map(task => this.renderTaskCard(task)).join('');
+        
+        // Calculate percentage of total tasks in this column
+        const totalTasks = this.tasks.length;
+        const columnTaskCount = column.tasks.length;
+        const percentage = totalTasks > 0 ? Math.round((columnTaskCount / totalTasks) * 100) : 0;
 
         return `
             <div class="kanban-column" data-column="${columnKey}">
                 <div class="kanban-header">
-                    <h3 class="kanban-title">${column.title}</h3>
+                    <h3 class="kanban-title">${column.title} <span class="column-percentage">${percentage}%</span></h3>
                     <span class="task-count">${column.tasks.length}</span>
                 </div>
                 <div class="kanban-tasks" id="kanban-${columnKey}">
